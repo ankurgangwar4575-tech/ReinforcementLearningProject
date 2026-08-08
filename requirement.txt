@@ -1,0 +1,7 @@
+torch
+numpy
+PyYAML
+gymnasium
+gym-super-mario-bros>=9.0.0
+opencv-python
+tensorboard

@@ -1,0 +1,23 @@
+environment:
+  game: "SuperMarioBros-1-1-v0"
+  frame_skip: 4
+  frame_stack: 4
+  resize: 84
+
+training:
+  seed: 42
+  total_steps: 1000000
+  batch_size: 32
+  gamma: 0.90
+  learning_rate: 0.00025
+  replay_memory_size: 100000
+  learning_starts: 10000
+  train_frequency: 4
+  target_update_frequency: 10000
+  checkpoint_frequency: 50000
+  checkpoint_path: "runs/checkpoints/mario_ddqn.pt"
+
+exploration:
+  epsilon_start: 1.0
+  epsilon_end: 0.10
+  epsilon_decay_steps: 500000
