@@ -64,6 +64,18 @@ def state_tensor(state, device):
     return torch.as_tensor(np.asarray(state), device=device).unsqueeze(0)
 
 
+def save_checkpoint(path, online_net, target_net, optimizer, step):
+    torch.save(
+        {
+            "online_net_state_dict": online_net.state_dict(),
+            "target_net_state_dict": target_net.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "step": step,
+        },
+        path,
+    )
+
+
 def learn(online_net, target_net, optimizer, replay, batch_size, gamma, device):
     states, actions, rewards, next_states, dones = zip(*replay.sample(batch_size))
     states = torch.as_tensor(np.asarray(states), device=device)
@@ -112,18 +124,45 @@ def main():
 
     checkpoint_path = Path(train_config["checkpoint_path"])
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    start_step = 0
+    if checkpoint_path.is_file():
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        if isinstance(checkpoint, dict) and "online_net_state_dict" in checkpoint:
+            online_net.load_state_dict(checkpoint["online_net_state_dict"])
+            target_net.load_state_dict(checkpoint.get("target_net_state_dict", checkpoint["online_net_state_dict"]))
+            if "optimizer_state_dict" in checkpoint:
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            start_step = checkpoint.get("step", 0)
+            print(f"Resumed checkpoint from step {start_step}")
+        else:
+            online_net.load_state_dict(checkpoint)
+            target_net.load_state_dict(checkpoint)
+            print("Resumed a model-only checkpoint")
+
+    run_end_step = min(
+        start_step + train_config["steps_per_run"],
+        train_config["total_steps"],
+    )
+    if start_step >= run_end_step:
+        print("Training target already reached. Increase total_steps to continue.")
+        env.close()
+        return
+
     # OneDrive can lock files inside the project directory. Store the optional
     # TensorBoard logs in the local application-data folder instead.
     local_app_data = Path(os.environ.get("LOCALAPPDATA", Path.cwd()))
     log_dir = local_app_data / "MarioDoubleDQN" / "tensorboard" / datetime.now().strftime("run_%Y%m%d_%H%M%S")
     writer = TrainingLogger(log_dir)
     print(f"TensorBoard logs: {log_dir}")
+    print(f"Training steps {start_step + 1} to {run_end_step}")
     state = reset_env(env)
     episode_reward = 0.0
     episode_number = 1
 
+    last_step = start_step
     try:
-        for step in range(1, train_config["total_steps"] + 1):
+        for step in range(start_step + 1, run_end_step + 1):
+            last_step = step
             epsilon = epsilon_at(
                 step,
                 exploration["epsilon_start"],
@@ -144,7 +183,7 @@ def main():
             writer.add_scalar("training/epsilon", epsilon, step)
 
             if (
-                step >= train_config["learning_starts"]
+                len(replay) >= train_config["learning_starts"]
                 and step % train_config["train_frequency"] == 0
                 and len(replay) >= train_config["batch_size"]
             ):
@@ -158,7 +197,7 @@ def main():
                 target_net.load_state_dict(online_net.state_dict())
 
             if step % train_config["checkpoint_frequency"] == 0:
-                torch.save({"online_net_state_dict": online_net.state_dict(), "step": step}, checkpoint_path)
+                save_checkpoint(checkpoint_path, online_net, target_net, optimizer, step)
                 print(f"Saved checkpoint at step {step}")
 
             if done:
@@ -168,8 +207,11 @@ def main():
                 episode_reward = 0.0
                 episode_number += 1
 
-        torch.save({"online_net_state_dict": online_net.state_dict(), "step": train_config["total_steps"]}, checkpoint_path)
-        print(f"Training complete. Model saved to {checkpoint_path}")
+        save_checkpoint(checkpoint_path, online_net, target_net, optimizer, last_step)
+        print(f"Training session complete. Model saved to {checkpoint_path}")
+    except KeyboardInterrupt:
+        save_checkpoint(checkpoint_path, online_net, target_net, optimizer, last_step)
+        print(f"Training interrupted. Model saved at step {last_step}")
     finally:
         writer.close()
         env.close()

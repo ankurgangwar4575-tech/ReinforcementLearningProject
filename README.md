@@ -35,9 +35,9 @@ Start training from the project directory:
 python agent.py
 ```
 
-The model checkpoint is written to `runs/checkpoints/mario_ddqn.pt`.
+The model checkpoint is written to `runs/checkpoints/mario_ddqn.pt`. Every new `python agent.py` command automatically resumes this checkpoint and trains for the configured `steps_per_run` (50,000 by default).
 
-> ⏳ For a quick pipeline check, use `total_steps: 20000` and `learning_starts: 1000`. For meaningful learning, restore `total_steps: 1000000` and `learning_starts: 10000`.
+> ⏳ For a quick pipeline check, use `total_steps: 20000`, `steps_per_run: 20000`, and `learning_starts: 1000`. For meaningful learning, restore `total_steps: 1000000`, `steps_per_run: 50000`, and `learning_starts: 10000`.
 
 ### 📊 Monitor training with TensorBoard
 

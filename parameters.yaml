@@ -7,6 +7,7 @@ environment:
 training:
   seed: 42
   total_steps: 1000000
+  steps_per_run: 50000
   batch_size: 32
   gamma: 0.90
   learning_rate: 0.00025
